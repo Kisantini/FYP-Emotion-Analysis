@@ -24,6 +24,26 @@ def load_model():
 model, tokenizer, label_map = load_model()
 model.eval()
 
+emotion_keywords = {
+    "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat"],
+    "disappointment": ["ok", "not good", "could be better"],
+    "happiness": ["good", "nice", "fast", "friendly"],
+    "sarcasm": ["very nice", "great", "thanks a lot"]
+}
+
+# ---------- Reason Mapping ----------
+reason_map = {
+    "late": "delivery delay",
+    "lambat": "delivery delay",
+    "slow": "slow service",
+    "broken": "damaged product",
+    "damage": "damaged product",
+    "damaged": "damaged product",
+    "rude": "staff behaviour issue",
+    "bad service": "poor service quality",
+    "bad": "poor product or service quality"
+}
+# ------------------------------------
 st.title("AI-Based Emotional Analysis of Customer Reviews")
 
 review = st.text_area("Enter customer review")
