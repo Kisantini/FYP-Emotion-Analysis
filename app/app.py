@@ -1,7 +1,5 @@
-
 import streamlit as st
 import torch
-import json
 from transformers import BertTokenizer, BertForSequenceClassification
 
 @st.cache_resource
@@ -21,26 +19,10 @@ def load_model():
 
     return model, tokenizer, label_map
 
+
+# ---------- LOAD MODEL ----------
+model, tokenizer, label_map = load_model()
 model.eval()
-
-emotion_keywords = {
-    "anger": ["bad", "rude", "broken", "damage", "late", "lambat"],
-    "disappointment": ["ok", "not good", "could be better"],
-    "happiness": ["good", "nice", "fast", "friendly"],
-    "sarcasm": ["very nice", "great", "thanks a lot"]
-}
-
-reason_map = {
-    "late": "delivery delay",
-    "lambat": "delivery delay",
-    "slow": "slow service",
-    "broken": "damaged product",
-    "damage": "damaged product",
-    "damaged": "damaged product",
-    "rude": "staff behaviour issue",
-    "bad service": "poor service quality",
-    "bad": "poor product or service quality"
-}
 
 st.title("AI-Based Emotional Analysis of Customer Reviews")
 
