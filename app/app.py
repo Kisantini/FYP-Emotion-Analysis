@@ -6,16 +6,21 @@ from transformers import BertTokenizer, BertForSequenceClassification
 
 @st.cache_resource
 def load_model():
-    model = BertForSequenceClassification.from_pretrained("model/bert_emotion_model")
-    tokenizer = BertTokenizer.from_pretrained("model/bert_emotion_model")
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    model = BertForSequenceClassification.from_pretrained(
+        "bert-base-uncased",
+        num_labels=4
+    )
 
-    with open("model/bert_emotion_model/label_map.json") as f:
-        label_map = json.load(f)
+    label_map = {
+        0: "anger",
+        1: "disappointment",
+        2: "happiness",
+        3: "sarcasm"
+    }
 
-    reverse_label_map = {v: k for k, v in label_map.items()}
-    return model, tokenizer, reverse_label_map
+    return model, tokenizer, label_map
 
-model, tokenizer, label_map = load_model()
 model.eval()
 
 emotion_keywords = {
