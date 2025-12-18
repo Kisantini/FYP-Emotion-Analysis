@@ -31,6 +31,27 @@ def init_database():
 init_database()
 
 # =================================================
+# SAVE CUSTOMER FEEDBACK
+# =================================================
+def save_feedback_to_db(review_text):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO reviews (timestamp, review_text, emotions, confidence, reasons)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        review_text,
+        None,
+        None,
+        None
+    ))
+
+    conn.commit()
+    conn.close()
+    
+# =================================================
 # APP CONFIG
 # =================================================
 st.set_page_config(
