@@ -56,181 +56,178 @@ init_database()
 if "role" not in st.session_state:
     st.session_state.role = None
 
-# =================================================
-# LOAD MODEL
-# =================================================
-@st.cache_resource
-def load_model():
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    model = BertForSequenceClassification.from_pretrained(
-        "bert-base-uncased",
-        num_labels=4
-    )
-    label_map = {
-        0: "anger",
-        1: "disappointment",
-        2: "happiness",
-        3: "sarcasm"
-    }
-    model.eval()
-    return model, tokenizer, label_map
-
-model, tokenizer, label_map = load_model()
-
-# =================================================
-# EMOTION & REASON LOGIC
-# =================================================
-emotion_keywords = {
-    "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat", "teruk", "kasar"],
-    "disappointment": ["ok", "not good", "could be better", "nothing special"],
-    "happiness": ["good", "nice", "fast", "friendly", "sedap", "recommended"],
-    "sarcasm": ["very nice", "great", "thanks ya"]
-}
-
-reason_map = {
-    "late": "delivery delay",
-    "lambat": "delivery delay",
-    "broken": "damaged product",
-    "damaged": "damaged product",
-    "rude": "staff behaviour issue",
-    "kasar": "staff behaviour issue",
-    "bad": "poor service quality"
-}
-
-# =================================================
-# LANDING PAGE
-# =================================================
-if st.session_state.role is None:
-    st.markdown("<h1 style='text-align:center;'>🧠 CustomerSense AI</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;'>AI-Based Customer Emotion Intelligence Platform</p>", unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("🧑‍💬 Customer Feedback", use_container_width=True):
-            st.session_state.role = "customer"
-            st.rerun()
-
-    with col2:
-        if st.button("🏢 Business Dashboard", use_container_width=True):
-            st.session_state.role = "business"
-            st.rerun()
-
-    st.stop()
-
-# =================================================
-# CUSTOMER PAGE
-# =================================================
-if st.session_state.role == "customer":
-    st.markdown("## 🧑‍💬 Customer Feedback")
-
-    review = st.text_area(
-        "Please share your experience",
-        placeholder="Example: delivery lambat but staff friendly"
-    )
-
-    if st.button("Submit Feedback"):
-        if review.strip():
-            save_feedback(review)
-            st.success("THANK YOU FOR YOUR TIME.")
-            st.success("SEE YOU AGAIN.")
-            st.success("HAVE A NICE DAY 😊")
-            st.stop()
-        else:
-            st.warning("Please enter your feedback.")
-
-# =================================================
-# BUSINESS DASHBOARD
-# =================================================
 if st.session_state.role == "business":
     st.markdown("## 🏢 Business Emotion Dashboard")
 
-    df = load_reviews()
+    tab1, tab2, tab3 = st.tabs([
+        "📊 Customer Database",
+        "✍️ Single Review",
+        "📂 Batch / File Upload"
+    ])
 
-    if df.empty:
-        st.info("No customer feedback available yet.")
-        st.stop()
+    # =================================================
+    # TAB 1 — CUSTOMER DATABASE ANALYSIS
+    # =================================================
+    with tab1:
+        st.markdown("### 📊 Analysis from Real Customer Feedback")
 
-    analysis_results = []
-    trend_data = []
+        df = load_reviews()
 
-    for _, row in df.iterrows():
-        review = row["review_text"]
-        date = pd.to_datetime(row["timestamp"]).date()
+        if df.empty:
+            st.info("No customer feedback available yet.")
+            st.stop()
 
-        inputs = tokenizer(review, return_tensors="pt", truncation=True, padding=True)
-        outputs = model(**inputs)
-        probs = torch.softmax(outputs.logits, dim=1)
-        confidence, pred = torch.max(probs, dim=1)
+        source_df = df.copy()
 
-        detected = {label_map[pred.item()]}
-        review_lower = review.lower()
+    # =================================================
+    # TAB 2 — SINGLE REVIEW ANALYSIS
+    # =================================================
+    with tab2:
+        st.markdown("### ✍️ Single Review Testing")
 
-        for emo, keys in emotion_keywords.items():
-            for k in keys:
-                if k in review_lower:
-                    detected.add(emo)
+        review = st.text_area(
+            "Enter a review for testing",
+            placeholder="Example: delivery lambat but staff rude gila"
+        )
 
-        reasons = list({v for k, v in reason_map.items() if k in review_lower})
+        if st.button("Analyze Single Review"):
+            if review.strip():
+                source_df = pd.DataFrame([{
+                    "review_text": review,
+                    "timestamp": datetime.now()
+                }])
+            else:
+                st.warning("Please enter a review.")
+                st.stop()
 
-        analysis_results.append({
-            "Review": review,
-            "Emotions": ", ".join(detected),
-            "Confidence (%)": round(confidence.item() * 100, 2),
-            "Reasons": ", ".join(reasons)
-        })
+    # =================================================
+    # TAB 3 — BATCH / FILE UPLOAD ANALYSIS
+    # =================================================
+    with tab3:
+        st.markdown("### 📂 Batch / File Upload Analysis")
 
-        for emo in detected:
-            trend_data.append({"date": date, "emotion": emo})
+        file = st.file_uploader(
+            "Upload CSV or TXT file",
+            type=["csv", "txt"]
+        )
 
-    result_df = pd.DataFrame(analysis_results)
-    trend_df = pd.DataFrame(trend_data)
+        if file:
+            if file.name.endswith(".csv"):
+                temp_df = pd.read_csv(file)
+                temp_df.columns = ["review_text"]
+                source_df = temp_df
+                source_df["timestamp"] = datetime.now()
+            else:
+                lines = file.read().decode("utf-8").splitlines()
+                source_df = pd.DataFrame(lines, columns=["review_text"])
+                source_df["timestamp"] = datetime.now()
 
-    # ================= KPIs =================
-    st.markdown("### 📊 Key Metrics")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Reviews", len(result_df))
-    col2.metric("Anger Cases", result_df["Emotions"].str.contains("anger").sum())
-    col3.metric("Avg Confidence (%)", f"{result_df['Confidence (%)'].mean():.2f}")
+    # =================================================
+    # ANALYSIS ENGINE (COMMON FOR ALL TABS)
+    # =================================================
+    if "source_df" in locals():
 
-    # ================= EMOTION DISTRIBUTION =================
-    st.markdown("### 📊 Emotion Distribution")
-    emotion_counts = result_df["Emotions"].str.get_dummies(sep=", ").sum()
-    st.bar_chart(emotion_counts)
+        analysis_results = []
+        trend_data = []
 
-    # ================= TREND =================
-    st.markdown("### 📈 Emotion Trend Over Time")
-    trend_chart = trend_df.groupby(["date", "emotion"]).size().unstack(fill_value=0)
-    st.line_chart(trend_chart)
+        for _, row in source_df.iterrows():
+            review = row["review_text"]
+            date = pd.to_datetime(row["timestamp"]).date()
 
-    # ================= ISSUES =================
-    st.markdown("### 🔥 Main Issues Identified")
-    issue_counts = result_df["Reasons"].str.get_dummies(sep=", ").sum()
-    issue_counts = issue_counts[issue_counts.index != ""]
-    if not issue_counts.empty:
-        st.bar_chart(issue_counts)
-    else:
-        st.info("No major issues detected.")
+            inputs = tokenizer(
+                review,
+                return_tensors="pt",
+                truncation=True,
+                padding=True
+            )
 
-    # ================= INSIGHT =================
-    st.markdown("### 🧠 AI Business Insight")
-    top_emotion = emotion_counts.idxmax()
-    top_issue = issue_counts.idxmax() if not issue_counts.empty else "No dominant issue"
+            outputs = model(**inputs)
+            probs = torch.softmax(outputs.logits, dim=1)
+            confidence, pred = torch.max(probs, dim=1)
 
-    st.success(
-        f"Customers mostly express **{top_emotion}**. "
-        f"The main issue identified is **{top_issue}**. "
-        "Immediate improvement actions are recommended."
-    )
+            detected = {label_map[pred.item()]}
+            review_lower = review.lower()
 
-    # ================= TABLE & EXPORT =================
-    st.markdown("### 📄 Detailed Analysis")
-    st.dataframe(result_df)
+            for emo, keys in emotion_keywords.items():
+                for k in keys:
+                    if k in review_lower:
+                        detected.add(emo)
 
-    csv = result_df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "⬇️ Download Analysis Report",
-        csv,
-        "customersense_report.csv",
-        "text/csv"
-    )
+            reasons = list({v for k, v in reason_map.items() if k in review_lower})
+
+            analysis_results.append({
+                "Review": review,
+                "Emotions": ", ".join(detected),
+                "Confidence (%)": round(confidence.item() * 100, 2),
+                "Reasons": ", ".join(reasons)
+            })
+
+            for emo in detected:
+                trend_data.append({"date": date, "emotion": emo})
+
+        result_df = pd.DataFrame(analysis_results)
+        trend_df = pd.DataFrame(trend_data)
+
+        # =================================================
+        # KPI METRICS
+        # =================================================
+        st.markdown("### 📊 Key Metrics")
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Reviews", len(result_df))
+        col2.metric("Anger Cases", result_df["Emotions"].str.contains("anger").sum())
+        col3.metric("Avg Confidence (%)", f"{result_df['Confidence (%)'].mean():.2f}")
+
+        # =================================================
+        # EMOTION DISTRIBUTION
+        # =================================================
+        st.markdown("### 📊 Emotion Distribution")
+        emotion_counts = result_df["Emotions"].str.get_dummies(sep=", ").sum()
+        st.bar_chart(emotion_counts)
+
+        # =================================================
+        # EMOTION TREND
+        # =================================================
+        st.markdown("### 📈 Emotion Trend Over Time")
+        trend_chart = trend_df.groupby(["date", "emotion"]).size().unstack(fill_value=0)
+        st.line_chart(trend_chart)
+
+        # =================================================
+        # ISSUE ANALYSIS
+        # =================================================
+        st.markdown("### 🔥 Main Issues Identified")
+        issue_counts = result_df["Reasons"].str.get_dummies(sep=", ").sum()
+        issue_counts = issue_counts[issue_counts.index != ""]
+
+        if not issue_counts.empty:
+            st.bar_chart(issue_counts)
+        else:
+            st.info("No major issues detected.")
+
+        # =================================================
+        # AI INSIGHT
+        # =================================================
+        st.markdown("### 🧠 AI Business Insight")
+
+        top_emotion = emotion_counts.idxmax()
+        top_issue = issue_counts.idxmax() if not issue_counts.empty else "No dominant issue"
+
+        st.success(
+            f"Customers mostly express **{top_emotion}** emotion. "
+            f"The most common issue is **{top_issue}**. "
+            "Immediate action is recommended."
+        )
+
+        # =================================================
+        # TABLE & EXPORT
+        # =================================================
+        st.markdown("### 📄 Detailed Analysis")
+        st.dataframe(result_df)
+
+        csv = result_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Download Analysis Report",
+            csv,
+            "customersense_report.csv",
+            "text/csv"
+        )
