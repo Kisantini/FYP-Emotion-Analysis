@@ -1,12 +1,26 @@
 import streamlit as st
 import torch
+import pandas as pd
 from transformers import BertTokenizer, BertForSequenceClassification
+from datetime import datetime
 
 # =================================================
-# SESSION STATE (FOR DASHBOARD ANALYTICS)
+# APP CONFIG
+# =================================================
+st.set_page_config(
+    page_title="CustomerSense AI",
+    page_icon="🧠",
+    layout="wide"
+)
+
+# =================================================
+# SESSION STATE
 # =================================================
 if "analysis_history" not in st.session_state:
     st.session_state.analysis_history = []
+
+if "analysis_records" not in st.session_state:
+    st.session_state.analysis_records = []
 
 # =================================================
 # LOAD MODEL
@@ -25,7 +39,6 @@ def load_model():
         2: "happiness",
         3: "sarcasm"
     }
-
     return model, tokenizer, label_map
 
 
@@ -33,257 +46,180 @@ model, tokenizer, label_map = load_model()
 model.eval()
 
 # =================================================
-# EMOTION KEYWORDS & REASON MAP
+# BUSINESS LOGIC
 # =================================================
 emotion_keywords = {
     "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat"],
     "disappointment": ["ok", "not good", "could be better"],
     "happiness": ["good", "nice", "fast", "friendly"],
-    "sarcasm": ["very nice", "great", "thanks a lot"]
+    "sarcasm": ["very nice", "great"]
 }
 
 reason_map = {
     "late": "delivery delay",
     "lambat": "delivery delay",
-    "slow": "slow service",
     "broken": "damaged product",
-    "damage": "damaged product",
     "damaged": "damaged product",
     "rude": "staff behaviour issue",
-    "bad service": "poor service quality",
-    "bad": "poor product or service quality"
+    "bad": "poor service quality"
 }
 
-# =================================================
-# BUSINESS INTELLIGENCE LOGIC
-# =================================================
 department_map = {
-    "delivery delay": "Logistics & Delivery",
-    "damaged product": "Product Quality & Packaging",
+    "delivery delay": "Logistics",
+    "damaged product": "Quality Control",
     "staff behaviour issue": "Customer Service",
     "poor service quality": "Customer Service"
 }
 
 recommendation_map = {
-    "delivery delay": "Improve delivery tracking and notify customers proactively.",
-    "damaged product": "Enhance packaging quality and perform quality checks before delivery.",
-    "staff behaviour issue": "Provide customer service training to frontline staff.",
-    "poor service quality": "Review service workflow and staff performance."
+    "delivery delay": "Improve delivery tracking and communication.",
+    "damaged product": "Improve packaging and quality inspection.",
+    "staff behaviour issue": "Conduct customer service training.",
+    "poor service quality": "Review service workflow."
 }
 
 # =================================================
-# SIDEBAR NAVIGATION
+# HEADER
 # =================================================
-st.sidebar.title("CustomerSense AI")
-st.sidebar.markdown("AI-powered Customer Emotion Intelligence")
-
-menu = st.sidebar.radio(
-    "Navigation",
-    [
-        "🏠 Dashboard",
-        "🧠 Live Review Analyzer",
-        "📊 Insights",
-        "💡 Business Recommendations",
-        "ℹ️ About"
-    ]
+st.markdown(
+    """
+    <h1 style='text-align:center;'>🧠 CustomerSense AI</h1>
+    <p style='text-align:center;'>Customer Emotion Intelligence Platform</p>
+    """,
+    unsafe_allow_html=True
 )
 
 # =================================================
-# DASHBOARD PAGE
+# TABS
 # =================================================
-if menu == "🏠 Dashboard":
-    st.title("CustomerSense AI")
-    st.subheader("Understand What Your Customers Really Feel — In Real Time")
-
-    st.markdown("""
-    **CustomerSense AI** is a professional AI system that analyzes customer reviews
-    in real time and translates emotions into business intelligence.
-    """)
-
-    st.markdown("### 🔍 Key Capabilities")
-    st.markdown("""
-    - Real-time analysis  
-    - Mixed-language & slang support  
-    - Multi-emotion detection  
-    - Sarcasm recognition  
-    - Business impact explanation  
-    """)
+tab1, tab2, tab3 = st.tabs(["🧠 Analyze", "📊 Dashboard", "📥 Reports & KPIs"])
 
 # =================================================
-# LIVE REVIEW ANALYZER
+# TAB 1 — ANALYZE
 # =================================================
-elif menu == "🧠 Live Review Analyzer":
-    st.title("Live Review Analyzer")
+with tab1:
+    st.markdown("## 🔍 Step 1: Choose Input Method")
 
-    analysis_mode = st.radio(
-        "Select Analysis Mode",
-        ["Single Review", "Batch Reviews"]
+    input_mode = st.selectbox(
+        "Select review input type",
+        ["✍️ Single Review", "📋 Batch Text", "📂 Upload File"]
     )
 
-    if analysis_mode == "Single Review":
-        review_input = st.text_area(
-            "Enter customer review",
-            placeholder="food ok but staff rude gila"
-        )
-        reviews = [review_input]
+    reviews = []
+
+    if input_mode == "✍️ Single Review":
+        text = st.text_area("Enter customer review")
+        if text.strip():
+            reviews = [text]
+
+    elif input_mode == "📋 Batch Text":
+        batch = st.text_area("Enter multiple reviews (one per line)")
+        reviews = [r for r in batch.split("\n") if r.strip()]
+
     else:
-        batch_text = st.text_area(
-            "Enter multiple reviews (one per line)",
-            placeholder="delivery lambat\nservice very bad lah\nfood ok but staff rude gila"
-        )
-        reviews = batch_text.split("\n")
+        file = st.file_uploader("Upload CSV or TXT file", type=["csv", "txt"])
+        if file:
+            if file.name.endswith(".csv"):
+                df = pd.read_csv(file)
+                reviews = df.iloc[:, 0].dropna().tolist()
+            else:
+                reviews = file.read().decode("utf-8").splitlines()
 
-    if st.button("Analyze Review"):
-        if any(r.strip() for r in reviews):
+    if st.button("🚀 Analyze"):
+        if not reviews:
+            st.warning("Please provide at least one review.")
+        else:
+            st.markdown("---")
+            st.markdown("## 📄 Analysis Results")
+
             for review in reviews:
-                if review.strip() == "":
-                    continue
-
-                st.markdown("---")
                 st.markdown(f"### 📝 Review: *{review}*")
 
-                # ---------------- MODEL PREDICTION ----------------
                 inputs = tokenizer(review, return_tensors="pt", truncation=True, padding=True)
                 outputs = model(**inputs)
-                logits = outputs.logits
-                probabilities = torch.softmax(logits, dim=1)
-                confidence, prediction = torch.max(probabilities, dim=1)
+                probs = torch.softmax(outputs.logits, dim=1)
+                confidence, pred = torch.max(probs, dim=1)
 
-                primary_emotion = label_map[prediction.item()]
-                detected_emotions = set([primary_emotion])
+                primary_emotion = label_map[pred.item()]
+                detected = set([primary_emotion])
 
                 review_lower = review.lower()
+                for e, keys in emotion_keywords.items():
+                    for k in keys:
+                        if k in review_lower:
+                            detected.add(e)
 
-                # ---------------- KEYWORD-BASED EMOTION ----------------
-                for emotion, keywords in emotion_keywords.items():
-                    for word in keywords:
-                        if word in review_lower:
-                            detected_emotions.add(emotion)
+                reasons = list({v for k, v in reason_map.items() if k in review_lower})
 
-                # ---------------- SARCASM DETECTION ----------------
-                positive_triggers = ["very nice", "great", "excellent"]
-                negative_triggers = ["broken", "damaged", "bad", "late", "lambat"]
+                # Save history
+                st.session_state.analysis_history.extend(detected)
 
-                for p in positive_triggers:
-                    if p in review_lower:
-                        for n in negative_triggers:
-                            if n in review_lower:
-                                detected_emotions.add("sarcasm")
-
-                # SAVE FOR DASHBOARD
-                st.session_state.analysis_history.extend(list(detected_emotions))
-
-                # ---------------- OUTPUT ----------------
-                st.markdown("### 🧠 Emotion Analysis Result")
-
-                emotion_icons = {
-                    "anger": "😡",
-                    "disappointment": "😕",
-                    "happiness": "😊",
-                    "sarcasm": "🙃"
+                record = {
+                    "timestamp": datetime.now(),
+                    "review": review,
+                    "emotions": ", ".join(detected),
+                    "confidence": round(confidence.item() * 100, 2),
+                    "reasons": ", ".join(reasons)
                 }
+                st.session_state.analysis_records.append(record)
 
-                st.success(" | ".join(
-                    f"{emotion_icons.get(e,'')} {e.capitalize()}"
-                    for e in detected_emotions
-                ))
-
-                # CONFIDENCE
-                st.markdown("### 📈 Model Confidence")
+                st.success(" | ".join(detected))
                 st.progress(float(confidence.item()))
-                st.write(f"Confidence Score: **{confidence.item() * 100:.2f}%**")
-
-                # REASONS
-                st.markdown("### ❓ Why This Happened")
-                reasons = set()
-                for word, reason in reason_map.items():
-                    if word in review_lower:
-                        reasons.add(reason)
+                st.caption(f"Confidence: {confidence.item()*100:.2f}%")
 
                 if reasons:
-                    for r in reasons:
-                        st.write(f"- {r}")
-                else:
-                    st.write("No specific issue detected.")
+                    st.write("**Reason:**", ", ".join(reasons))
 
-                # RISK LEVEL
-                st.markdown("### 🚦 Business Priority Level")
-                if "anger" in detected_emotions and "sarcasm" in detected_emotions:
-                    st.error("🔴 Critical Issue – Immediate attention required")
-                elif "anger" in detected_emotions:
-                    st.warning("🟡 Needs Attention")
-                else:
-                    st.success("🟢 Normal Feedback")
-
-                # DEPARTMENT
-                st.markdown("### 🏢 Affected Department")
-                departments = set()
-                for r in reasons:
-                    if r in department_map:
-                        departments.add(department_map[r])
-
-                if departments:
-                    for d in departments:
-                        st.write(f"- {d}")
-                else:
-                    st.write("General feedback")
-
-                # RECOMMENDATION
-                st.markdown("### 💡 Recommended Business Action")
-                recs = set()
-                for r in reasons:
-                    if r in recommendation_map:
-                        recs.add(recommendation_map[r])
-
-                if recs:
-                    for rec in recs:
-                        st.write(f"- {rec}")
-                else:
-                    st.write("No immediate action required.")
-        else:
-            st.warning("Please enter at least one review.")
+                st.markdown("---")
 
 # =================================================
-# INSIGHTS DASHBOARD
+# TAB 2 — DASHBOARD (ADMIN KPI VIEW)
 # =================================================
-elif menu == "📊 Insights":
-    st.title("Customer Emotion Analytics")
+with tab2:
+    st.markdown("## 📊 Admin Analytics Dashboard")
 
-    if len(st.session_state.analysis_history) == 0:
-        st.info("No analysis data available yet.")
+    if not st.session_state.analysis_history:
+        st.info("No data available yet.")
     else:
-        emotion_counts = {}
+        df = pd.DataFrame(st.session_state.analysis_records)
+
+        # KPI METRICS
+        total_reviews = len(df)
+        avg_conf = df["confidence"].mean()
+
+        emotion_count = {}
         for e in st.session_state.analysis_history:
-            emotion_counts[e] = emotion_counts.get(e, 0) + 1
+            emotion_count[e] = emotion_count.get(e, 0) + 1
+
+        critical_cases = emotion_count.get("anger", 0)
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Reviews", total_reviews)
+        col2.metric("Avg Confidence (%)", f"{avg_conf:.2f}")
+        col3.metric("Anger Cases", critical_cases)
 
         st.markdown("### 📊 Emotion Distribution")
-        st.bar_chart(emotion_counts)
-
-        dominant = max(emotion_counts, key=emotion_counts.get)
-        st.markdown("### 📌 Key Insight")
-        st.write(f"Most frequent emotion detected: **{dominant.capitalize()}**")
+        st.bar_chart(emotion_count)
 
 # =================================================
-# BUSINESS RECOMMENDATIONS PAGE
+# TAB 3 — EXPORT REPORTS
 # =================================================
-elif menu == "💡 Business Recommendations":
-    st.title("AI-Driven Business Recommendations")
+with tab3:
+    st.markdown("## 📥 Export Analysis Reports")
 
-    st.markdown("""
-    This system converts emotional signals into actionable insights
-    to support operational and strategic decision-making.
-    """)
+    if not st.session_state.analysis_records:
+        st.info("No analysis data to export.")
+    else:
+        export_df = pd.DataFrame(st.session_state.analysis_records)
 
-# =================================================
-# ABOUT PAGE
-# =================================================
-elif menu == "ℹ️ About":
-    st.title("About CustomerSense AI")
+        st.dataframe(export_df)
 
-    st.markdown("""
-    CustomerSense AI is a BERT-based real-time emotion analysis system
-    developed as a Final Year Project (FYP).
+        csv = export_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Download CSV Report",
+            data=csv,
+            file_name="customersense_report.csv",
+            mime="text/csv"
+        )
 
-    It supports mixed-language reviews, sarcasm detection,
-    explainable AI output, and business intelligence features.
-    """)
+        st.success("Report ready for business use.")
