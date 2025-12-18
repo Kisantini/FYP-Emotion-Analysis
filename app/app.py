@@ -55,6 +55,9 @@ init_database()
 # =================================================
 if "role" not in st.session_state:
     st.session_state.role = None
+    
+if "source_df" not in st.session_state:
+    st.session_state.source_df = None
 
 if st.session_state.role == "business":
     st.markdown("## 🏢 Business Emotion Dashboard")
@@ -77,7 +80,7 @@ if st.session_state.role == "business":
             st.info("No customer feedback available yet.")
             st.stop()
 
-        source_df = df.copy()
+        st.session_state.source_df = df.copy()
 
     # =================================================
     # TAB 2 — SINGLE REVIEW ANALYSIS
@@ -92,7 +95,7 @@ if st.session_state.role == "business":
 
         if st.button("Analyze Single Review"):
             if review.strip():
-                source_df = pd.DataFrame([{
+                st.session_state.source_df = pd.DataFrame([{
                     "review_text": review,
                     "timestamp": datetime.now()
                 }])
@@ -115,22 +118,22 @@ if st.session_state.role == "business":
             if file.name.endswith(".csv"):
                 temp_df = pd.read_csv(file)
                 temp_df.columns = ["review_text"]
-                source_df = temp_df
-                source_df["timestamp"] = datetime.now()
+                st.session_state.source_df = temp_df
+                st.session_state.source_df["timestamp"] = datetime.now()
             else:
                 lines = file.read().decode("utf-8").splitlines()
-                source_df = pd.DataFrame(lines, columns=["review_text"])
-                source_df["timestamp"] = datetime.now()
+                st.session_state.source_df = pd.DataFrame(lines, columns=["review_text"])
+                st.session_state.source_df["timestamp"] = datetime.now()
 
     # =================================================
     # ANALYSIS ENGINE (COMMON FOR ALL TABS)
     # =================================================
-    if "source_df" in locals():
+    if st.session_state.source_df is not None:
 
         analysis_results = []
         trend_data = []
 
-        for _, row in source_df.iterrows():
+        for _, row in st.session_state.source_df.iterrows():
             review = row["review_text"]
             date = pd.to_datetime(row["timestamp"]).date()
 
