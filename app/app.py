@@ -43,6 +43,45 @@ reason_map = {
     "bad service": "poor service quality",
     "bad": "poor product or service quality"
 }
+
+# ---------- SIDEBAR ----------
+st.sidebar.title("CustomerSense AI")
+st.sidebar.markdown("AI-powered Customer Emotion Intelligence")
+
+menu = st.sidebar.radio(
+    "Navigation",
+    [
+        "🏠 Dashboard",
+        "🧠 Live Review Analyzer",
+        "📊 Insights",
+        "💡 Business Recommendations",
+        "ℹ️ About"
+    ]
+)
+if menu == "🏠 Dashboard":
+    st.title("CustomerSense AI")
+    st.subheader("Understand What Your Customers Really Feel — In Real Time")
+
+    st.markdown("""
+    **CustomerSense AI** helps businesses analyze customer reviews instantly using
+    advanced AI techniques. It detects multiple emotions, understands mixed language,
+    explains customer dissatisfaction, and highlights business risks.
+    """)
+
+    st.markdown("### 🔍 Key Capabilities")
+    st.markdown("""
+    - Real-time emotion analysis  
+    - Mixed-language & slang understanding  
+    - Multi-emotion detection  
+    - Sarcasm recognition  
+    - Business-focused explanations  
+    """)
+
+    st.info("This system is designed for business owners, customer support teams, and service managers.")
+
+# ----------------------------
+
+
 # ------------------------------------
 st.title("AI-Based Emotional Analysis of Customer Reviews")
 
