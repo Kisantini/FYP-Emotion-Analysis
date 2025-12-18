@@ -2,9 +2,9 @@ import streamlit as st
 import torch
 from transformers import BertTokenizer, BertForSequenceClassification
 
-# -------------------------------------------------
+# =================================================
 # LOAD MODEL
-# -------------------------------------------------
+# =================================================
 @st.cache_resource
 def load_model():
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
@@ -26,9 +26,9 @@ def load_model():
 model, tokenizer, label_map = load_model()
 model.eval()
 
-# -------------------------------------------------
+# =================================================
 # EMOTION KEYWORDS & REASON MAP
-# -------------------------------------------------
+# =================================================
 emotion_keywords = {
     "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat"],
     "disappointment": ["ok", "not good", "could be better"],
@@ -48,9 +48,26 @@ reason_map = {
     "bad": "poor product or service quality"
 }
 
-# -------------------------------------------------
+# =================================================
+# BUSINESS INTELLIGENCE LOGIC
+# =================================================
+department_map = {
+    "delivery delay": "Logistics & Delivery",
+    "damaged product": "Product Quality & Packaging",
+    "staff behaviour issue": "Customer Service",
+    "poor service quality": "Customer Service"
+}
+
+recommendation_map = {
+    "delivery delay": "Improve delivery tracking and notify customers proactively.",
+    "damaged product": "Enhance packaging quality and perform quality checks before delivery.",
+    "staff behaviour issue": "Provide customer service training to frontline staff.",
+    "poor service quality": "Review service workflow and staff performance."
+}
+
+# =================================================
 # SIDEBAR NAVIGATION
-# -------------------------------------------------
+# =================================================
 st.sidebar.title("CustomerSense AI")
 st.sidebar.markdown("AI-powered Customer Emotion Intelligence")
 
@@ -65,35 +82,35 @@ menu = st.sidebar.radio(
     ]
 )
 
-# -------------------------------------------------
+# =================================================
 # DASHBOARD PAGE
-# -------------------------------------------------
+# =================================================
 if menu == "🏠 Dashboard":
     st.title("CustomerSense AI")
     st.subheader("Understand What Your Customers Really Feel — In Real Time")
 
     st.markdown("""
-    **CustomerSense AI** is a business-oriented emotion analysis system that helps
-    organizations understand customer feedback beyond basic sentiment labels.
+    **CustomerSense AI** is a professional AI system designed to help businesses
+    understand customer emotions beyond simple positive or negative labels.
     """)
 
     st.markdown("### 🔍 Key Capabilities")
     st.markdown("""
     - Real-time customer review analysis  
-    - Mixed-language and slang understanding  
+    - Mixed-language & slang understanding  
     - Multi-emotion detection  
     - Sarcasm recognition  
     - Explainable business insights  
     """)
 
-    st.info("Designed for business owners, customer service teams, and operations managers.")
+    st.info("Designed for business owners, managers, and customer support teams.")
 
-# -------------------------------------------------
+# =================================================
 # LIVE REVIEW ANALYZER
-# -------------------------------------------------
+# =================================================
 elif menu == "🧠 Live Review Analyzer":
     st.title("Live Review Analyzer")
-    st.markdown("Analyze customer feedback instantly and identify emotional impact.")
+    st.markdown("Analyze customer feedback instantly and receive actionable insights.")
 
     review = st.text_area(
         "Enter customer review",
@@ -102,7 +119,7 @@ elif menu == "🧠 Live Review Analyzer":
 
     if st.button("Analyze Review"):
         if review.strip() != "":
-            # ---------------- EXISTING ANALYSIS LOGIC ----------------
+            # ----------- MODEL PREDICTION -----------
             inputs = tokenizer(review, return_tensors="pt", truncation=True, padding=True)
             outputs = model(**inputs)
             prediction = torch.argmax(outputs.logits, dim=1)
@@ -113,12 +130,13 @@ elif menu == "🧠 Live Review Analyzer":
 
             review_lower = review.lower()
 
+            # ----------- KEYWORD EMOTION DETECTION -----------
             for emotion, keywords in emotion_keywords.items():
                 for word in keywords:
                     if word in review_lower:
                         detected_emotions.add(emotion)
 
-            # Sarcasm logic
+            # ----------- SARCASM DETECTION -----------
             positive_triggers = ["very nice", "great", "excellent"]
             negative_triggers = ["broken", "damaged", "bad", "late", "lambat"]
 
@@ -128,7 +146,27 @@ elif menu == "🧠 Live Review Analyzer":
                         if n in review_lower:
                             detected_emotions.add("sarcasm")
 
-            st.success(f"Detected Emotions: {', '.join(detected_emotions)}")
+            # =================================================
+            # OUTPUT SECTION (BUSINESS-GRADE)
+            # =================================================
+            st.markdown("### 🧠 Emotion Analysis Result")
+
+            emotion_icons = {
+                "anger": "😡",
+                "disappointment": "😕",
+                "happiness": "😊",
+                "sarcasm": "🙃"
+            }
+
+            emotion_display = [
+                f"{emotion_icons.get(e, '')} {e.capitalize()}"
+                for e in detected_emotions
+            ]
+
+            st.success(" | ".join(emotion_display))
+
+            # ----------- REASONS -----------
+            st.markdown("### ❓ Why This Happened")
 
             reasons = set()
             for word, reason in reason_map.items():
@@ -136,64 +174,99 @@ elif menu == "🧠 Live Review Analyzer":
                     reasons.add(reason)
 
             if reasons:
-                st.info("Possible reasons:")
                 for r in reasons:
                     st.write(f"- {r}")
             else:
-                st.info("No specific issue detected")
-            # ----------------------------------------------------------
+                st.write("No specific issue detected.")
+
+            # ----------- RISK LEVEL -----------
+            st.markdown("### 🚦 Business Priority Level")
+
+            if "anger" in detected_emotions and "sarcasm" in detected_emotions:
+                st.error("🔴 Critical Issue – Immediate attention required")
+            elif "anger" in detected_emotions:
+                st.warning("🟡 Needs Attention")
+            else:
+                st.success("🟢 Normal Feedback")
+
+            # ----------- DEPARTMENT IMPACT -----------
+            st.markdown("### 🏢 Affected Department")
+
+            affected_departments = set()
+            for r in reasons:
+                if r in department_map:
+                    affected_departments.add(department_map[r])
+
+            if affected_departments:
+                for d in affected_departments:
+                    st.write(f"- {d}")
+            else:
+                st.write("General feedback")
+
+            # ----------- BUSINESS RECOMMENDATION -----------
+            st.markdown("### 💡 Recommended Business Action")
+
+            recommendations = set()
+            for r in reasons:
+                if r in recommendation_map:
+                    recommendations.add(recommendation_map[r])
+
+            if recommendations:
+                for rec in recommendations:
+                    st.write(f"- {rec}")
+            else:
+                st.write("No immediate action required.")
 
         else:
             st.warning("Please enter a review")
 
-# -------------------------------------------------
+# =================================================
 # INSIGHTS PAGE
-# -------------------------------------------------
+# =================================================
 elif menu == "📊 Insights":
     st.title("Customer Insights Overview")
     st.markdown("""
-    This section provides a high-level view of customer emotional trends.
-    Advanced analytics and charts can be added in future versions.
+    This section summarizes emotional trends from analyzed customer reviews.
+    Advanced charts and analytics can be added in future versions.
     """)
 
     st.info("Analyze more customer reviews to generate insights.")
 
-# -------------------------------------------------
+# =================================================
 # BUSINESS RECOMMENDATIONS PAGE
-# -------------------------------------------------
+# =================================================
 elif menu == "💡 Business Recommendations":
     st.title("AI-Driven Business Recommendations")
 
     st.markdown("""
-    CustomerSense AI supports management decision-making by translating
-    customer emotions into actionable business improvements.
+    CustomerSense AI transforms emotional feedback into actionable business insights
+    to support management decision-making.
     """)
 
     st.markdown("""
     **Examples:**
-    - Delivery delays → Improve logistics coordination  
-    - Staff behaviour complaints → Customer service training  
-    - Product damage issues → Enhance packaging and quality checks  
+    - Delivery delays → Improve logistics tracking  
+    - Staff complaints → Customer service training  
+    - Product damage → Better packaging and quality control  
     """)
 
-    st.success("This feature helps businesses respond proactively to customer dissatisfaction.")
+    st.success("Designed to help businesses respond proactively to customer issues.")
 
-# -------------------------------------------------
+# =================================================
 # ABOUT PAGE
-# -------------------------------------------------
+# =================================================
 elif menu == "ℹ️ About":
     st.title("About CustomerSense AI")
 
     st.markdown("""
-    CustomerSense AI is developed using **BERT-based deep learning models**
-    combined with rule-based reasoning to improve interpretability.
+    CustomerSense AI is a BERT-based emotion analysis system developed as a
+    Final Year Project (FYP).
 
-    The system is designed to:
-    - Handle informal and mixed-language customer reviews  
-    - Detect multiple emotions in real time  
-    - Identify sarcasm and hidden dissatisfaction  
-    - Provide explainable outputs for business users  
+    The system supports:
+    - Mixed-language customer reviews  
+    - Multi-emotion detection  
+    - Sarcasm understanding  
+    - Explainable, business-focused outputs  
 
-    This project is developed as a **Final Year Project (FYP)** focusing on
-    practical, real-world AI deployment.
+    This project focuses on real-time AI deployment and practical business usability.
     """)
