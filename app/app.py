@@ -2,7 +2,33 @@ import streamlit as st
 import torch
 import pandas as pd
 from transformers import BertTokenizer, BertForSequenceClassification
+import sqlite3
 from datetime import datetime
+
+# =================================================
+# DATABASE SETUP
+# =================================================
+DB_PATH = "reviews.db"
+
+def init_database():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            review_text TEXT,
+            emotions TEXT,
+            confidence REAL,
+            reasons TEXT
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_database()
 
 # =================================================
 # APP CONFIG
