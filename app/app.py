@@ -35,10 +35,10 @@ def init_database():
 def save_feedback(review_text):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO reviews (timestamp, review_text)
-        VALUES (?, ?)
-    """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), review_text))
+    cursor.execute(
+        "INSERT INTO reviews (timestamp, review_text) VALUES (?, ?)",
+        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), review_text)
+    )
     conn.commit()
     conn.close()
 
@@ -81,10 +81,10 @@ model, tokenizer, label_map = load_model()
 # EMOTION & REASON LOGIC
 # =================================================
 emotion_keywords = {
-    "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat"],
-    "disappointment": ["ok", "not good", "could be better"],
-    "happiness": ["good", "nice", "fast", "friendly", "sedap"],
-    "sarcasm": ["very nice", "great"]
+    "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat", "teruk", "kasar"],
+    "disappointment": ["ok", "not good", "could be better", "nothing special"],
+    "happiness": ["good", "nice", "fast", "friendly", "sedap", "recommended"],
+    "sarcasm": ["very nice", "great", "thanks ya"]
 }
 
 reason_map = {
@@ -93,6 +93,7 @@ reason_map = {
     "broken": "damaged product",
     "damaged": "damaged product",
     "rude": "staff behaviour issue",
+    "kasar": "staff behaviour issue",
     "bad": "poor service quality"
 }
 
@@ -101,7 +102,7 @@ reason_map = {
 # =================================================
 if st.session_state.role is None:
     st.markdown("<h1 style='text-align:center;'>🧠 CustomerSense AI</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;'>Customer Emotion Intelligence Platform</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;'>AI-Based Customer Emotion Intelligence Platform</p>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
 
@@ -122,7 +123,11 @@ if st.session_state.role is None:
 # =================================================
 if st.session_state.role == "customer":
     st.markdown("## 🧑‍💬 Customer Feedback")
-    review = st.text_area("Please share your experience")
+
+    review = st.text_area(
+        "Please share your experience",
+        placeholder="Example: delivery lambat but staff friendly"
+    )
 
     if st.button("Submit Feedback"):
         if review.strip():
@@ -132,7 +137,7 @@ if st.session_state.role == "customer":
             st.success("HAVE A NICE DAY 😊")
             st.stop()
         else:
-            st.warning("Please write something.")
+            st.warning("Please enter your feedback.")
 
 # =================================================
 # BUSINESS DASHBOARD
@@ -147,11 +152,11 @@ if st.session_state.role == "business":
         st.stop()
 
     analysis_results = []
-    trend_records = []
+    trend_data = []
 
     for _, row in df.iterrows():
         review = row["review_text"]
-        ts = pd.to_datetime(row["timestamp"]).date()
+        date = pd.to_datetime(row["timestamp"]).date()
 
         inputs = tokenizer(review, return_tensors="pt", truncation=True, padding=True)
         outputs = model(**inputs)
@@ -161,10 +166,10 @@ if st.session_state.role == "business":
         detected = {label_map[pred.item()]}
         review_lower = review.lower()
 
-        for e, keys in emotion_keywords.items():
+        for emo, keys in emotion_keywords.items():
             for k in keys:
                 if k in review_lower:
-                    detected.add(e)
+                    detected.add(emo)
 
         reasons = list({v for k, v in reason_map.items() if k in review_lower})
 
@@ -176,10 +181,10 @@ if st.session_state.role == "business":
         })
 
         for emo in detected:
-            trend_records.append({"date": ts, "emotion": emo})
+            trend_data.append({"date": date, "emotion": emo})
 
     result_df = pd.DataFrame(analysis_results)
-    trend_df = pd.DataFrame(trend_records)
+    trend_df = pd.DataFrame(trend_data)
 
     # ================= KPIs =================
     st.markdown("### 📊 Key Metrics")
@@ -193,29 +198,29 @@ if st.session_state.role == "business":
     emotion_counts = result_df["Emotions"].str.get_dummies(sep=", ").sum()
     st.bar_chart(emotion_counts)
 
-    # ================= TREND CHART =================
+    # ================= TREND =================
     st.markdown("### 📈 Emotion Trend Over Time")
     trend_chart = trend_df.groupby(["date", "emotion"]).size().unstack(fill_value=0)
     st.line_chart(trend_chart)
 
-    # ================= ISSUE ANALYSIS =================
+    # ================= ISSUES =================
     st.markdown("### 🔥 Main Issues Identified")
     issue_counts = result_df["Reasons"].str.get_dummies(sep=", ").sum()
     issue_counts = issue_counts[issue_counts.index != ""]
     if not issue_counts.empty:
         st.bar_chart(issue_counts)
     else:
-        st.info("No critical issues detected yet.")
+        st.info("No major issues detected.")
 
-    # ================= AI INSIGHT =================
+    # ================= INSIGHT =================
     st.markdown("### 🧠 AI Business Insight")
     top_emotion = emotion_counts.idxmax()
-    top_issue = issue_counts.idxmax() if not issue_counts.empty else "No major issue"
+    top_issue = issue_counts.idxmax() if not issue_counts.empty else "No dominant issue"
 
     st.success(
-        f"Most customers are expressing **{top_emotion}**. "
-        f"The dominant issue identified is **{top_issue}**. "
-        "Management attention is recommended."
+        f"Customers mostly express **{top_emotion}**. "
+        f"The main issue identified is **{top_issue}**. "
+        "Immediate improvement actions are recommended."
     )
 
     # ================= TABLE & EXPORT =================
