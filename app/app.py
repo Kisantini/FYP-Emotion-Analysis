@@ -3,6 +3,12 @@ import torch
 from transformers import BertTokenizer, BertForSequenceClassification
 
 # =================================================
+# SESSION STATE (FOR DASHBOARD ANALYTICS)
+# =================================================
+if "analysis_history" not in st.session_state:
+    st.session_state.analysis_history = []
+
+# =================================================
 # LOAD MODEL
 # =================================================
 @st.cache_resource
@@ -90,147 +96,172 @@ if menu == "🏠 Dashboard":
     st.subheader("Understand What Your Customers Really Feel — In Real Time")
 
     st.markdown("""
-    **CustomerSense AI** is a professional AI system designed to help businesses
-    understand customer emotions beyond simple positive or negative labels.
+    **CustomerSense AI** is a professional AI system that analyzes customer reviews
+    in real time and translates emotions into business intelligence.
     """)
 
     st.markdown("### 🔍 Key Capabilities")
     st.markdown("""
-    - Real-time customer review analysis  
-    - Mixed-language & slang understanding  
+    - Real-time analysis  
+    - Mixed-language & slang support  
     - Multi-emotion detection  
     - Sarcasm recognition  
-    - Explainable business insights  
+    - Business impact explanation  
     """)
-
-    st.info("Designed for business owners, managers, and customer support teams.")
 
 # =================================================
 # LIVE REVIEW ANALYZER
 # =================================================
 elif menu == "🧠 Live Review Analyzer":
     st.title("Live Review Analyzer")
-    st.markdown("Analyze customer feedback instantly and receive actionable insights.")
 
-    review = st.text_area(
-        "Enter customer review",
-        placeholder="Example: food ok but staff rude gila"
+    analysis_mode = st.radio(
+        "Select Analysis Mode",
+        ["Single Review", "Batch Reviews"]
     )
 
+    if analysis_mode == "Single Review":
+        review_input = st.text_area(
+            "Enter customer review",
+            placeholder="food ok but staff rude gila"
+        )
+        reviews = [review_input]
+    else:
+        batch_text = st.text_area(
+            "Enter multiple reviews (one per line)",
+            placeholder="delivery lambat\nservice very bad lah\nfood ok but staff rude gila"
+        )
+        reviews = batch_text.split("\n")
+
     if st.button("Analyze Review"):
-        if review.strip() != "":
-            # ----------- MODEL PREDICTION -----------
-            inputs = tokenizer(review, return_tensors="pt", truncation=True, padding=True)
-            outputs = model(**inputs)
-            prediction = torch.argmax(outputs.logits, dim=1)
+        if any(r.strip() for r in reviews):
+            for review in reviews:
+                if review.strip() == "":
+                    continue
 
-            primary_emotion = label_map[prediction.item()]
-            detected_emotions = set()
-            detected_emotions.add(primary_emotion)
+                st.markdown("---")
+                st.markdown(f"### 📝 Review: *{review}*")
 
-            review_lower = review.lower()
+                # ---------------- MODEL PREDICTION ----------------
+                inputs = tokenizer(review, return_tensors="pt", truncation=True, padding=True)
+                outputs = model(**inputs)
+                logits = outputs.logits
+                probabilities = torch.softmax(logits, dim=1)
+                confidence, prediction = torch.max(probabilities, dim=1)
 
-            # ----------- KEYWORD EMOTION DETECTION -----------
-            for emotion, keywords in emotion_keywords.items():
-                for word in keywords:
+                primary_emotion = label_map[prediction.item()]
+                detected_emotions = set([primary_emotion])
+
+                review_lower = review.lower()
+
+                # ---------------- KEYWORD-BASED EMOTION ----------------
+                for emotion, keywords in emotion_keywords.items():
+                    for word in keywords:
+                        if word in review_lower:
+                            detected_emotions.add(emotion)
+
+                # ---------------- SARCASM DETECTION ----------------
+                positive_triggers = ["very nice", "great", "excellent"]
+                negative_triggers = ["broken", "damaged", "bad", "late", "lambat"]
+
+                for p in positive_triggers:
+                    if p in review_lower:
+                        for n in negative_triggers:
+                            if n in review_lower:
+                                detected_emotions.add("sarcasm")
+
+                # SAVE FOR DASHBOARD
+                st.session_state.analysis_history.extend(list(detected_emotions))
+
+                # ---------------- OUTPUT ----------------
+                st.markdown("### 🧠 Emotion Analysis Result")
+
+                emotion_icons = {
+                    "anger": "😡",
+                    "disappointment": "😕",
+                    "happiness": "😊",
+                    "sarcasm": "🙃"
+                }
+
+                st.success(" | ".join(
+                    f"{emotion_icons.get(e,'')} {e.capitalize()}"
+                    for e in detected_emotions
+                ))
+
+                # CONFIDENCE
+                st.markdown("### 📈 Model Confidence")
+                st.progress(float(confidence.item()))
+                st.write(f"Confidence Score: **{confidence.item() * 100:.2f}%**")
+
+                # REASONS
+                st.markdown("### ❓ Why This Happened")
+                reasons = set()
+                for word, reason in reason_map.items():
                     if word in review_lower:
-                        detected_emotions.add(emotion)
+                        reasons.add(reason)
 
-            # ----------- SARCASM DETECTION -----------
-            positive_triggers = ["very nice", "great", "excellent"]
-            negative_triggers = ["broken", "damaged", "bad", "late", "lambat"]
+                if reasons:
+                    for r in reasons:
+                        st.write(f"- {r}")
+                else:
+                    st.write("No specific issue detected.")
 
-            for p in positive_triggers:
-                if p in review_lower:
-                    for n in negative_triggers:
-                        if n in review_lower:
-                            detected_emotions.add("sarcasm")
+                # RISK LEVEL
+                st.markdown("### 🚦 Business Priority Level")
+                if "anger" in detected_emotions and "sarcasm" in detected_emotions:
+                    st.error("🔴 Critical Issue – Immediate attention required")
+                elif "anger" in detected_emotions:
+                    st.warning("🟡 Needs Attention")
+                else:
+                    st.success("🟢 Normal Feedback")
 
-            # =================================================
-            # OUTPUT SECTION (BUSINESS-GRADE)
-            # =================================================
-            st.markdown("### 🧠 Emotion Analysis Result")
-
-            emotion_icons = {
-                "anger": "😡",
-                "disappointment": "😕",
-                "happiness": "😊",
-                "sarcasm": "🙃"
-            }
-
-            emotion_display = [
-                f"{emotion_icons.get(e, '')} {e.capitalize()}"
-                for e in detected_emotions
-            ]
-
-            st.success(" | ".join(emotion_display))
-
-            # ----------- REASONS -----------
-            st.markdown("### ❓ Why This Happened")
-
-            reasons = set()
-            for word, reason in reason_map.items():
-                if word in review_lower:
-                    reasons.add(reason)
-
-            if reasons:
+                # DEPARTMENT
+                st.markdown("### 🏢 Affected Department")
+                departments = set()
                 for r in reasons:
-                    st.write(f"- {r}")
-            else:
-                st.write("No specific issue detected.")
+                    if r in department_map:
+                        departments.add(department_map[r])
 
-            # ----------- RISK LEVEL -----------
-            st.markdown("### 🚦 Business Priority Level")
+                if departments:
+                    for d in departments:
+                        st.write(f"- {d}")
+                else:
+                    st.write("General feedback")
 
-            if "anger" in detected_emotions and "sarcasm" in detected_emotions:
-                st.error("🔴 Critical Issue – Immediate attention required")
-            elif "anger" in detected_emotions:
-                st.warning("🟡 Needs Attention")
-            else:
-                st.success("🟢 Normal Feedback")
+                # RECOMMENDATION
+                st.markdown("### 💡 Recommended Business Action")
+                recs = set()
+                for r in reasons:
+                    if r in recommendation_map:
+                        recs.add(recommendation_map[r])
 
-            # ----------- DEPARTMENT IMPACT -----------
-            st.markdown("### 🏢 Affected Department")
-
-            affected_departments = set()
-            for r in reasons:
-                if r in department_map:
-                    affected_departments.add(department_map[r])
-
-            if affected_departments:
-                for d in affected_departments:
-                    st.write(f"- {d}")
-            else:
-                st.write("General feedback")
-
-            # ----------- BUSINESS RECOMMENDATION -----------
-            st.markdown("### 💡 Recommended Business Action")
-
-            recommendations = set()
-            for r in reasons:
-                if r in recommendation_map:
-                    recommendations.add(recommendation_map[r])
-
-            if recommendations:
-                for rec in recommendations:
-                    st.write(f"- {rec}")
-            else:
-                st.write("No immediate action required.")
-
+                if recs:
+                    for rec in recs:
+                        st.write(f"- {rec}")
+                else:
+                    st.write("No immediate action required.")
         else:
-            st.warning("Please enter a review")
+            st.warning("Please enter at least one review.")
 
 # =================================================
-# INSIGHTS PAGE
+# INSIGHTS DASHBOARD
 # =================================================
 elif menu == "📊 Insights":
-    st.title("Customer Insights Overview")
-    st.markdown("""
-    This section summarizes emotional trends from analyzed customer reviews.
-    Advanced charts and analytics can be added in future versions.
-    """)
+    st.title("Customer Emotion Analytics")
 
-    st.info("Analyze more customer reviews to generate insights.")
+    if len(st.session_state.analysis_history) == 0:
+        st.info("No analysis data available yet.")
+    else:
+        emotion_counts = {}
+        for e in st.session_state.analysis_history:
+            emotion_counts[e] = emotion_counts.get(e, 0) + 1
+
+        st.markdown("### 📊 Emotion Distribution")
+        st.bar_chart(emotion_counts)
+
+        dominant = max(emotion_counts, key=emotion_counts.get)
+        st.markdown("### 📌 Key Insight")
+        st.write(f"Most frequent emotion detected: **{dominant.capitalize()}**")
 
 # =================================================
 # BUSINESS RECOMMENDATIONS PAGE
@@ -239,18 +270,9 @@ elif menu == "💡 Business Recommendations":
     st.title("AI-Driven Business Recommendations")
 
     st.markdown("""
-    CustomerSense AI transforms emotional feedback into actionable business insights
-    to support management decision-making.
+    This system converts emotional signals into actionable insights
+    to support operational and strategic decision-making.
     """)
-
-    st.markdown("""
-    **Examples:**
-    - Delivery delays → Improve logistics tracking  
-    - Staff complaints → Customer service training  
-    - Product damage → Better packaging and quality control  
-    """)
-
-    st.success("Designed to help businesses respond proactively to customer issues.")
 
 # =================================================
 # ABOUT PAGE
@@ -259,14 +281,9 @@ elif menu == "ℹ️ About":
     st.title("About CustomerSense AI")
 
     st.markdown("""
-    CustomerSense AI is a BERT-based emotion analysis system developed as a
-    Final Year Project (FYP).
+    CustomerSense AI is a BERT-based real-time emotion analysis system
+    developed as a Final Year Project (FYP).
 
-    The system supports:
-    - Mixed-language customer reviews  
-    - Multi-emotion detection  
-    - Sarcasm understanding  
-    - Explainable, business-focused outputs  
-
-    This project focuses on real-time AI deployment and practical business usability.
+    It supports mixed-language reviews, sarcasm detection,
+    explainable AI output, and business intelligence features.
     """)
