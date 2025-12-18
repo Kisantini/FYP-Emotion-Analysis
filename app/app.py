@@ -1,9 +1,9 @@
 import streamlit as st
 import torch
 import pandas as pd
-from transformers import BertTokenizer, BertForSequenceClassification
 import sqlite3
 from datetime import datetime
+from transformers import BertTokenizer, BertForSequenceClassification
 
 # =================================================
 # APP CONFIG
@@ -26,44 +26,35 @@ def init_database():
         CREATE TABLE IF NOT EXISTS reviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp TEXT,
-            review_text TEXT,
-            emotions TEXT,
-            confidence REAL,
-            reasons TEXT
+            review_text TEXT
         )
     """)
     conn.commit()
     conn.close()
 
-init_database()
-
-def save_feedback_to_db(review_text):
+def save_feedback(review_text):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO reviews (timestamp, review_text)
         VALUES (?, ?)
-    """, (
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        review_text
-    ))
+    """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), review_text))
     conn.commit()
     conn.close()
 
-def load_reviews_from_db():
+def load_reviews():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql("SELECT * FROM reviews", conn)
     conn.close()
     return df
+
+init_database()
 
 # =================================================
 # SESSION STATE
 # =================================================
 if "role" not in st.session_state:
     st.session_state.role = None
-
-if "analysis_records" not in st.session_state:
-    st.session_state.analysis_records = []
 
 # =================================================
 # LOAD MODEL
@@ -87,12 +78,12 @@ def load_model():
 model, tokenizer, label_map = load_model()
 
 # =================================================
-# BUSINESS LOGIC
+# EMOTION & REASON LOGIC
 # =================================================
 emotion_keywords = {
     "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat"],
     "disappointment": ["ok", "not good", "could be better"],
-    "happiness": ["good", "nice", "fast", "friendly"],
+    "happiness": ["good", "nice", "fast", "friendly", "sedap"],
     "sarcasm": ["very nice", "great"]
 }
 
@@ -131,20 +122,17 @@ if st.session_state.role is None:
 # =================================================
 if st.session_state.role == "customer":
     st.markdown("## 🧑‍💬 Customer Feedback")
-    feedback = st.text_area(
-        "Please share your experience",
-        placeholder="Type your review here..."
-    )
+    review = st.text_area("Please share your experience")
 
     if st.button("Submit Feedback"):
-        if feedback.strip():
-            save_feedback_to_db(feedback)
+        if review.strip():
+            save_feedback(review)
             st.success("THANK YOU FOR YOUR TIME.")
             st.success("SEE YOU AGAIN.")
             st.success("HAVE A NICE DAY 😊")
             st.stop()
         else:
-            st.warning("Please enter your feedback.")
+            st.warning("Please write something.")
 
 # =================================================
 # BUSINESS DASHBOARD
@@ -152,16 +140,19 @@ if st.session_state.role == "customer":
 if st.session_state.role == "business":
     st.markdown("## 🏢 Business Emotion Dashboard")
 
-    df = load_reviews_from_db()
+    df = load_reviews()
 
     if df.empty:
         st.info("No customer feedback available yet.")
         st.stop()
 
-    reviews = df["review_text"].dropna().tolist()
-    results = []
+    analysis_results = []
+    trend_records = []
 
-    for review in reviews:
+    for _, row in df.iterrows():
+        review = row["review_text"]
+        ts = pd.to_datetime(row["timestamp"]).date()
+
         inputs = tokenizer(review, return_tensors="pt", truncation=True, padding=True)
         outputs = model(**inputs)
         probs = torch.softmax(outputs.logits, dim=1)
@@ -177,21 +168,57 @@ if st.session_state.role == "business":
 
         reasons = list({v for k, v in reason_map.items() if k in review_lower})
 
-        results.append({
+        analysis_results.append({
             "Review": review,
             "Emotions": ", ".join(detected),
             "Confidence (%)": round(confidence.item() * 100, 2),
             "Reasons": ", ".join(reasons)
         })
 
-    result_df = pd.DataFrame(results)
+        for emo in detected:
+            trend_records.append({"date": ts, "emotion": emo})
 
-    # KPIs
+    result_df = pd.DataFrame(analysis_results)
+    trend_df = pd.DataFrame(trend_records)
+
+    # ================= KPIs =================
     st.markdown("### 📊 Key Metrics")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     col1.metric("Total Reviews", len(result_df))
     col2.metric("Anger Cases", result_df["Emotions"].str.contains("anger").sum())
+    col3.metric("Avg Confidence (%)", f"{result_df['Confidence (%)'].mean():.2f}")
 
+    # ================= EMOTION DISTRIBUTION =================
+    st.markdown("### 📊 Emotion Distribution")
+    emotion_counts = result_df["Emotions"].str.get_dummies(sep=", ").sum()
+    st.bar_chart(emotion_counts)
+
+    # ================= TREND CHART =================
+    st.markdown("### 📈 Emotion Trend Over Time")
+    trend_chart = trend_df.groupby(["date", "emotion"]).size().unstack(fill_value=0)
+    st.line_chart(trend_chart)
+
+    # ================= ISSUE ANALYSIS =================
+    st.markdown("### 🔥 Main Issues Identified")
+    issue_counts = result_df["Reasons"].str.get_dummies(sep=", ").sum()
+    issue_counts = issue_counts[issue_counts.index != ""]
+    if not issue_counts.empty:
+        st.bar_chart(issue_counts)
+    else:
+        st.info("No critical issues detected yet.")
+
+    # ================= AI INSIGHT =================
+    st.markdown("### 🧠 AI Business Insight")
+    top_emotion = emotion_counts.idxmax()
+    top_issue = issue_counts.idxmax() if not issue_counts.empty else "No major issue"
+
+    st.success(
+        f"Most customers are expressing **{top_emotion}**. "
+        f"The dominant issue identified is **{top_issue}**. "
+        "Management attention is recommended."
+    )
+
+    # ================= TABLE & EXPORT =================
     st.markdown("### 📄 Detailed Analysis")
     st.dataframe(result_df)
 
