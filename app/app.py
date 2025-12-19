@@ -171,27 +171,36 @@ if st.session_state.role is None:
 # CUSTOMER PAGE
 # =================================================
 elif st.session_state.role == "customer":
-    st.markdown("## 🧑‍💬 Customer Feedback")
+    st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+
+    st.markdown("### 🧑‍💬 Share Your Experience")
 
     review = st.text_area(
-        "Please share your experience",
-        placeholder="Example: delivery lambat but staff friendly"
+        "Your feedback matters to us",
+        placeholder="Example: delivery lambat but staff friendly",
+        height=140
     )
 
-    if st.button("Submit Feedback"):
+    if st.button("Submit Feedback", use_container_width=True):
         if review.strip():
             save_review(review)
-            st.success("THANK YOU FOR YOUR TIME.")
-            st.success("SEE YOU AGAIN.")
-            st.success("HAVE A NICE DAY 😊")
+            st.success("✅ THANK YOU FOR YOUR TIME.")
+            st.success("😊 SEE YOU AGAIN. HAVE A NICE DAY.")
             st.session_state.role = None
             st.rerun()
         else:
             st.warning("Please enter your feedback.")
 
+    st.markdown("</div>", unsafe_allow_html=True)
 # =================================================
 # BUSINESS DASHBOARD
 # =================================================
+st.sidebar.title("📊 Navigation")
+page = st.sidebar.radio(
+    "Go to",
+    ["Overview", "Single Review", "Batch / Upload", "Reports"]
+)
+
 elif st.session_state.role == "business":
     st.markdown("## 🏢 Business Emotion Dashboard")
 
