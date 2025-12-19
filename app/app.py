@@ -4,6 +4,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 from transformers import BertTokenizer, BertForSequenceClassification
+from sarcasm_detector import detect_sarcasm_with_confidence
 
 # =================================================
 # PAGE CONFIG
