@@ -114,6 +114,51 @@ def load_model():
         num_labels=4
     )
     model.eval()
+    def analyze_reviews(df):
+    results = []
+
+    for _, row in df.iterrows():
+        text = row["review_text"]
+
+        inputs = tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            padding=True
+        )
+
+        with torch.no_grad():
+            outputs = model(**inputs)
+
+        probs = torch.softmax(outputs.logits, dim=1)
+        confidence, pred = torch.max(probs, dim=1)
+
+        primary_emotion = label_map[pred.item()]
+        detected_emotions = {primary_emotion}
+
+        text_lower = text.lower()
+
+        for emotion, keywords in emotion_keywords.items():
+            for k in keywords:
+                if k in text_lower:
+                    detected_emotions.add(emotion)
+
+        reasons = list({v for k, v in reason_map.items() if k in text_lower})
+        departments = list({department_map[r] for r in reasons if r in department_map})
+        recommendations = list({recommendation_map[r] for r in reasons if r in recommendation_map})
+
+        results.append({
+            "timestamp": row["timestamp"],
+            "review": text,
+            "emotions": ", ".join(detected_emotions),
+            "confidence (%)": round(confidence.item() * 100, 2),
+            "reason": ", ".join(reasons) if reasons else "General sentiment",
+            "department": ", ".join(departments) if departments else "Management",
+            "recommendation": ", ".join(recommendations) if recommendations else "Monitor customer feedback"
+        })
+
+    return pd.DataFrame(results)
+
     labels = {
         0: "anger",
         1: "disappointment",
@@ -261,9 +306,27 @@ elif st.session_state.role == "business":
 
             df["timestamp"] = datetime.now()
             st.session_state.source_df = df
+            st.session_state.analysis_result = analyze_reviews(df)
             st.success(f"{len(df)} reviews loaded.")
 
         st.markdown("</div>", unsafe_allow_html=True)
+        if "analysis_result" in st.session_state:
+    st.markdown("## 📌 Emotion Analysis Results")
+
+    result_df = st.session_state.analysis_result
+
+    for _, row in result_df.iterrows():
+        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+
+        st.markdown(f"**📝 Review:** {row['review']}")
+        st.markdown(f"**😐 Emotion(s):** {row['emotions']}")
+        st.markdown(f"**📊 Confidence:** {row['confidence (%)']}%")
+        st.markdown(f"**⚠️ Reason:** {row['reason']}")
+        st.markdown(f"**🏢 Department:** {row['department']}")
+        st.markdown(f"**✅ Recommendation:** {row['recommendation']}")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
     # ================= REPORTS =================
     elif page == "Reports":
