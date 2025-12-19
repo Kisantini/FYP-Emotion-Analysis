@@ -205,6 +205,15 @@ elif st.session_state.role == "business":
             detected = {label_map[pred.item()]}
             text = review.lower()
 
+             #---- HYBRID SARCASM DETECTION ----
+            is_sarcastic = detect_sarcasm_with_confidence(
+                review_text=review,
+                sentiment_confidence=conf.item()
+            )
+            
+            if is_sarcastic:
+                detected.add("sarcasm")
+
             for emo, keys in emotion_keywords.items():
                 for k in keys:
                     if k in text:
