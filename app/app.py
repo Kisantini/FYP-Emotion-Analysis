@@ -1,111 +1,45 @@
 import streamlit as st
 import torch
 import pandas as pd
-import sqlite3
-from datetime import datetime
 from transformers import BertTokenizer, BertForSequenceClassification
+from datetime import datetime
 
-# =================================================
+# ==============================
 # PAGE CONFIG
-# =================================================
+# ==============================
 st.set_page_config(
     page_title="CustomerSense AI",
     page_icon="🧠",
     layout="wide"
 )
-# =================================================
-# GLOBAL APP STYLING
-# =================================================
+
+# ==============================
+# APP STYLE (APP-LIKE UI)
+# ==============================
 st.markdown("""
 <style>
-body {
-    background-color: #f6f8fa;
-}
-
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-}
-
 .app-card {
-    background-color: white;
-    padding: 2rem;
+    background-color: #ffffff;
+    padding: 20px;
     border-radius: 16px;
-    box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
-    margin-bottom: 1.5rem;
+    margin-bottom: 20px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    border-left: 6px solid #4CAF50;
 }
-
-.app-title {
-    font-size: 2.4rem;
+.big-title {
+    font-size: 32px;
     font-weight: 700;
-    text-align: center;
 }
-
-.app-subtitle {
-    font-size: 1.1rem;
-    text-align: center;
-    color: #555;
-    margin-bottom: 2rem;
-}
-
-.center-button button {
-    width: 100%;
-    height: 3.2rem;
-    font-size: 1.1rem;
-    border-radius: 12px;
+.sub-title {
+    font-size: 18px;
+    color: #666;
 }
 </style>
 """, unsafe_allow_html=True)
 
-
-# =================================================
-# DATABASE
-# =================================================
-DB_PATH = "reviews.db"
-
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS reviews (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            review_text TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-def save_review(text):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO reviews (timestamp, review_text) VALUES (?, ?)",
-        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), text)
-    )
-    conn.commit()
-    conn.close()
-
-def load_reviews():
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql("SELECT * FROM reviews", conn)
-    conn.close()
-    return df
-
-init_db()
-
-# =================================================
-# SESSION STATE
-# =================================================
-if "role" not in st.session_state:
-    st.session_state.role = None
-
-if "source_df" not in st.session_state:
-    st.session_state.source_df = None
-
-# =================================================
-# MODEL
-# =================================================
+# ==============================
+# LOAD MODEL
+# ==============================
 @st.cache_resource
 def load_model():
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
@@ -113,70 +47,25 @@ def load_model():
         "bert-base-uncased",
         num_labels=4
     )
-    model.eval()
-    def analyze_reviews(df):
-    results = []
-
-    for _, row in df.iterrows():
-        text = row["review_text"]
-
-        inputs = tokenizer(
-            text,
-            return_tensors="pt",
-            truncation=True,
-            padding=True
-        )
-
-        with torch.no_grad():
-            outputs = model(**inputs)
-
-        probs = torch.softmax(outputs.logits, dim=1)
-        confidence, pred = torch.max(probs, dim=1)
-
-        primary_emotion = label_map[pred.item()]
-        detected_emotions = {primary_emotion}
-
-        text_lower = text.lower()
-
-        for emotion, keywords in emotion_keywords.items():
-            for k in keywords:
-                if k in text_lower:
-                    detected_emotions.add(emotion)
-
-        reasons = list({v for k, v in reason_map.items() if k in text_lower})
-        departments = list({department_map[r] for r in reasons if r in department_map})
-        recommendations = list({recommendation_map[r] for r in reasons if r in recommendation_map})
-
-        results.append({
-            "timestamp": row["timestamp"],
-            "review": text,
-            "emotions": ", ".join(detected_emotions),
-            "confidence (%)": round(confidence.item() * 100, 2),
-            "reason": ", ".join(reasons) if reasons else "General sentiment",
-            "department": ", ".join(departments) if departments else "Management",
-            "recommendation": ", ".join(recommendations) if recommendations else "Monitor customer feedback"
-        })
-
-    return pd.DataFrame(results)
-
-    labels = {
+    label_map = {
         0: "anger",
         1: "disappointment",
         2: "happiness",
         3: "sarcasm"
     }
-    return model, tokenizer, labels
+    model.eval()
+    return model, tokenizer, label_map
 
 model, tokenizer, label_map = load_model()
 
-# =================================================
-# LOGIC
-# =================================================
+# ==============================
+# RULES & BUSINESS LOGIC
+# ==============================
 emotion_keywords = {
-    "anger": ["bad", "rude", "broken", "damaged", "late", "lambat", "teruk", "kasar"],
+    "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat"],
     "disappointment": ["ok", "not good", "could be better"],
-    "happiness": ["good", "nice", "fast", "friendly", "sedap"],
-    "sarcasm": ["very nice", "great", "thanks ya"]
+    "happiness": ["good", "nice", "fast", "friendly"],
+    "sarcasm": ["very nice", "great"]
 }
 
 reason_map = {
@@ -185,117 +74,128 @@ reason_map = {
     "broken": "damaged product",
     "damaged": "damaged product",
     "rude": "staff behaviour issue",
-    "kasar": "staff behaviour issue",
     "bad": "poor service quality"
 }
 
-# =================================================
+department_map = {
+    "delivery delay": "Logistics",
+    "damaged product": "Quality Control",
+    "staff behaviour issue": "Customer Service",
+    "poor service quality": "Customer Service"
+}
+
+recommendation_map = {
+    "delivery delay": "Improve delivery tracking and communication.",
+    "damaged product": "Improve packaging and inspection.",
+    "staff behaviour issue": "Conduct staff service training.",
+    "poor service quality": "Review service workflow."
+}
+
+# ==============================
+# ANALYSIS FUNCTION
+# ==============================
+def analyze_reviews(df):
+    results = []
+
+    for _, row in df.iterrows():
+        text = row["review_text"]
+
+        inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+        with torch.no_grad():
+            outputs = model(**inputs)
+
+        probs = torch.softmax(outputs.logits, dim=1)
+        confidence, pred = torch.max(probs, dim=1)
+
+        primary_emotion = label_map[pred.item()]
+        detected = {primary_emotion}
+
+        text_lower = text.lower()
+        for e, keys in emotion_keywords.items():
+            for k in keys:
+                if k in text_lower:
+                    detected.add(e)
+
+        reasons = list({v for k, v in reason_map.items() if k in text_lower})
+        departments = list({department_map[r] for r in reasons if r in department_map})
+        recommendations = list({recommendation_map[r] for r in reasons if r in recommendation_map})
+
+        results.append({
+            "timestamp": datetime.now(),
+            "review": text,
+            "emotions": ", ".join(detected),
+            "confidence (%)": round(confidence.item() * 100, 2),
+            "reason": ", ".join(reasons) if reasons else "General sentiment",
+            "department": ", ".join(departments) if departments else "Management",
+            "recommendation": ", ".join(recommendations) if recommendations else "Monitor feedback"
+        })
+
+    return pd.DataFrame(results)
+
+# ==============================
+# SESSION STATE
+# ==============================
+if "role" not in st.session_state:
+    st.session_state.role = None
+
+# ==============================
 # LANDING PAGE
-# =================================================
+# ==============================
+st.markdown("<div class='big-title'>🧠 CustomerSense AI</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>AI-Based Emotional Analysis Platform</div>", unsafe_allow_html=True)
+st.markdown("---")
+
 if st.session_state.role is None:
-    st.markdown("<div class='app-card'>", unsafe_allow_html=True)
-
-    st.markdown("<div class='app-title'>🧠 CustomerSense AI</div>", unsafe_allow_html=True)
-    st.markdown("<div class='app-subtitle'>AI-Based Customer Emotion Intelligence Platform</div>", unsafe_allow_html=True)
-
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("🧑‍💬 Customer Feedback", use_container_width=True):
+        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+        st.markdown("### 🙋 Customer")
+        st.write("Submit feedback or review")
+        if st.button("Enter as Customer"):
             st.session_state.role = "customer"
-            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
-        if st.button("🏢 Business Dashboard", use_container_width=True):
+        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+        st.markdown("### 🏢 Business")
+        st.write("Analyze customer emotions & insights")
+        if st.button("Enter as Business"):
             st.session_state.role = "business"
-            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# =================================================
-# CUSTOMER PAGE
-# =================================================
+# ==============================
+# CUSTOMER FLOW
+# ==============================
 elif st.session_state.role == "customer":
-    st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+    st.markdown("## ✍️ Customer Feedback")
+    review = st.text_area("Write your feedback")
 
-    st.markdown("### 🧑‍💬 Share Your Experience")
-
-    review = st.text_area(
-        "Your feedback matters to us",
-        placeholder="Example: delivery lambat but staff friendly",
-        height=140
-    )
-
-    if st.button("Submit Feedback", use_container_width=True):
+    if st.button("Submit Feedback"):
         if review.strip():
-            save_review(review)
-            st.success("✅ THANK YOU FOR YOUR TIME.")
-            st.success("😊 SEE YOU AGAIN. HAVE A NICE DAY.")
-            st.session_state.role = None
-            st.rerun()
+            st.success("THANK YOU FOR YOUR TIME. SEE YOU AGAIN. HAVE A NICE DAY 😊")
         else:
-            st.warning("Please enter your feedback.")
+            st.warning("Please write something.")
 
-    st.markdown("</div>", unsafe_allow_html=True)
-# =================================================
-# BUSINESS DASHBOARD
-# =================================================
+# ==============================
+# BUSINESS FLOW
+# ==============================
 elif st.session_state.role == "business":
-    st.markdown("<div class='app-card'>", unsafe_allow_html=True)
-    st.markdown("## 🏢 Business Emotion Dashboard")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ================= SIDEBAR NAVIGATION =================
     st.sidebar.title("📊 Navigation")
     page = st.sidebar.radio(
         "Go to",
-        ["Overview", "Single Review", "Batch / Upload", "Reports"]
+        ["Overview", "Single Review", "Batch / Upload"]
     )
 
-    # ================= OVERVIEW =================
-    if page == "Overview":
-        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
-        st.markdown("### 📊 Customer Database Overview")
+    if page == "Single Review":
+        text = st.text_area("Enter review")
+        if st.button("Analyze"):
+            if text.strip():
+                df = pd.DataFrame([{"review_text": text}])
+                st.session_state.analysis_result = analyze_reviews(df)
 
-        df = load_reviews()
-        if df.empty:
-            st.info("No customer data available.")
-            st.session_state.source_df = None
-        else:
-            st.session_state.source_df = df.copy()
-            st.success(f"Loaded {len(df)} customer reviews.")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # ================= SINGLE REVIEW =================
-    elif page == "Single Review":
-        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
-        st.markdown("### ✍️ Single Review Testing")
-
-        review = st.text_area(
-            "Enter a review",
-            placeholder="delivery lambat but staff rude gila"
-        )
-
-        if st.button("Analyze Review", use_container_width=True):
-            if review.strip():
-                st.session_state.source_df = pd.DataFrame([{
-                    "review_text": review,
-                    "timestamp": datetime.now()
-                }])
-                st.success("Review loaded for analysis.")
-            else:
-                st.warning("Please enter a review.")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # ================= BATCH / UPLOAD =================
     elif page == "Batch / Upload":
-        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
-        st.markdown("### 📂 Batch / File Upload")
-
         file = st.file_uploader("Upload CSV or TXT", type=["csv", "txt"])
-
         if file:
             if file.name.endswith(".csv"):
                 df = pd.read_csv(file)
@@ -304,41 +204,21 @@ elif st.session_state.role == "business":
                 lines = file.read().decode("utf-8").splitlines()
                 df = pd.DataFrame(lines, columns=["review_text"])
 
-            df["timestamp"] = datetime.now()
-            st.session_state.source_df = df
-            st.session_state.analysis_result = analyze_reviews(df)
-            st.success(f"{len(df)} reviews loaded.")
+            if st.button("Analyze File"):
+                st.session_state.analysis_result = analyze_reviews(df)
 
-        st.markdown("</div>", unsafe_allow_html=True)
-        if "analysis_result" in st.session_state:
-    st.markdown("## 📌 Emotion Analysis Results")
-
-    result_df = st.session_state.analysis_result
-
-    for _, row in result_df.iterrows():
-        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
-
-        st.markdown(f"**📝 Review:** {row['review']}")
-        st.markdown(f"**😐 Emotion(s):** {row['emotions']}")
-        st.markdown(f"**📊 Confidence:** {row['confidence (%)']}%")
-        st.markdown(f"**⚠️ Reason:** {row['reason']}")
-        st.markdown(f"**🏢 Department:** {row['department']}")
-        st.markdown(f"**✅ Recommendation:** {row['recommendation']}")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-    # ================= REPORTS =================
-    elif page == "Reports":
-        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
-        st.markdown("### 📄 Analysis Reports")
-
-        if st.session_state.source_df is None:
-            st.info("No data available for analysis.")
-        else:
-            st.success("Analysis data ready. Scroll down to view results.")
-
-        st.markdown("</div>", unsafe_allow_html=True)
+    # RESULTS
+    if "analysis_result" in st.session_state:
+        st.markdown("## 📌 Emotion Analysis Results")
+        for _, row in st.session_state.analysis_result.iterrows():
+            st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+            st.markdown(f"**📝 Review:** {row['review']}")
+            st.markdown(f"**😐 Emotion(s):** {row['emotions']}")
+            st.markdown(f"**📊 Confidence:** {row['confidence (%)']}%")
+            st.markdown(f"**⚠️ Reason:** {row['reason']}")
+            st.markdown(f"**🏢 Department:** {row['department']}")
+            st.markdown(f"**✅ Recommendation:** {row['recommendation']}")
+            st.markdown("</div>", unsafe_allow_html=True)
 
     # =================================================
     # ANALYSIS
