@@ -13,6 +13,50 @@ st.set_page_config(
     page_icon="🧠",
     layout="wide"
 )
+# =================================================
+# GLOBAL APP STYLING
+# =================================================
+st.markdown("""
+<style>
+body {
+    background-color: #f6f8fa;
+}
+
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+.app-card {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
+    margin-bottom: 1.5rem;
+}
+
+.app-title {
+    font-size: 2.4rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.app-subtitle {
+    font-size: 1.1rem;
+    text-align: center;
+    color: #555;
+    margin-bottom: 2rem;
+}
+
+.center-button button {
+    width: 100%;
+    height: 3.2rem;
+    font-size: 1.1rem;
+    border-radius: 12px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # =================================================
 # DATABASE
