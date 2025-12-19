@@ -148,10 +148,13 @@ reason_map = {
 # LANDING PAGE
 # =================================================
 if st.session_state.role is None:
-    st.markdown("<h1 style='text-align:center;'>🧠 CustomerSense AI</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;'>AI-Based Customer Emotion Intelligence Platform</p>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+
+    st.markdown("<div class='app-title'>🧠 CustomerSense AI</div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-subtitle'>AI-Based Customer Emotion Intelligence Platform</div>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
+
     with col1:
         if st.button("🧑‍💬 Customer Feedback", use_container_width=True):
             st.session_state.role = "customer"
@@ -161,6 +164,8 @@ if st.session_state.role is None:
         if st.button("🏢 Business Dashboard", use_container_width=True):
             st.session_state.role = "business"
             st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # =================================================
 # CUSTOMER PAGE
