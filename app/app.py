@@ -27,7 +27,7 @@ st.markdown("""
     border-left: 6px solid #4CAF50;
 }
 .big-title {
-    font-size: 32px;
+    font-size: 34px;
     font-weight: 700;
 }
 .sub-title {
@@ -47,19 +47,20 @@ def load_model():
         "bert-base-uncased",
         num_labels=4
     )
+    model.eval()
+
     label_map = {
         0: "anger",
         1: "disappointment",
         2: "happiness",
         3: "sarcasm"
     }
-    model.eval()
     return model, tokenizer, label_map
 
 model, tokenizer, label_map = load_model()
 
 # ==============================
-# RULES & BUSINESS LOGIC
+# BUSINESS RULES
 # ==============================
 emotion_keywords = {
     "anger": ["bad", "rude", "broken", "damage", "damaged", "late", "lambat"],
@@ -86,8 +87,8 @@ department_map = {
 
 recommendation_map = {
     "delivery delay": "Improve delivery tracking and communication.",
-    "damaged product": "Improve packaging and inspection.",
-    "staff behaviour issue": "Conduct staff service training.",
+    "damaged product": "Improve packaging and quality inspection.",
+    "staff behaviour issue": "Conduct customer service training.",
     "poor service quality": "Review service workflow."
 }
 
@@ -133,6 +134,38 @@ def analyze_reviews(df):
     return pd.DataFrame(results)
 
 # ==============================
+# KPI FUNCTION
+# ==============================
+def show_business_kpis(df):
+    st.markdown("## 📊 Business KPIs")
+
+    total = len(df)
+
+    emotion_count = {}
+    for emotions in df["emotions"]:
+        for e in emotions.split(", "):
+            emotion_count[e] = emotion_count.get(e, 0) + 1
+
+    negative = emotion_count.get("anger", 0) + emotion_count.get("disappointment", 0)
+    sarcasm = emotion_count.get("sarcasm", 0)
+    avg_conf = df["confidence (%)"].mean()
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Reviews", total)
+    c2.metric("Negative Reviews", f"{(negative/total)*100:.1f}%")
+    c3.metric("Sarcasm Rate", f"{(sarcasm/total)*100:.1f}%")
+    c4.metric("Avg Confidence", f"{avg_conf:.1f}%")
+
+    st.markdown("### 📈 Emotion Distribution")
+    st.bar_chart(emotion_count)
+
+    st.markdown("### 🏢 Department Impact")
+    st.bar_chart(df["department"].value_counts())
+
+    if negative / total > 0.4:
+        st.error("⚠️ High customer dissatisfaction detected. Immediate action required.")
+
+# ==============================
 # SESSION STATE
 # ==============================
 if "role" not in st.session_state:
@@ -142,7 +175,7 @@ if "role" not in st.session_state:
 # LANDING PAGE
 # ==============================
 st.markdown("<div class='big-title'>🧠 CustomerSense AI</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>AI-Based Emotional Analysis Platform</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-title'>AI-Based Emotional Analysis of Customer Reviews</div>", unsafe_allow_html=True)
 st.markdown("---")
 
 if st.session_state.role is None:
@@ -184,12 +217,12 @@ elif st.session_state.role == "business":
     st.sidebar.title("📊 Navigation")
     page = st.sidebar.radio(
         "Go to",
-        ["Overview", "Single Review", "Batch / Upload"]
+        ["Single Review", "Batch / Upload"]
     )
 
     if page == "Single Review":
-        text = st.text_area("Enter review")
-        if st.button("Analyze"):
+        text = st.text_area("Enter customer review")
+        if st.button("Analyze Review"):
             if text.strip():
                 df = pd.DataFrame([{"review_text": text}])
                 st.session_state.analysis_result = analyze_reviews(df)
@@ -207,7 +240,6 @@ elif st.session_state.role == "business":
             if st.button("Analyze File"):
                 st.session_state.analysis_result = analyze_reviews(df)
 
-    # RESULTS
     if "analysis_result" in st.session_state:
         st.markdown("## 📌 Emotion Analysis Results")
         for _, row in st.session_state.analysis_result.iterrows():
@@ -219,3 +251,5 @@ elif st.session_state.role == "business":
             st.markdown(f"**🏢 Department:** {row['department']}")
             st.markdown(f"**✅ Recommendation:** {row['recommendation']}")
             st.markdown("</div>", unsafe_allow_html=True)
+
+        show_business_kpis(st.session_state.analysis_result)
