@@ -196,43 +196,61 @@ elif st.session_state.role == "customer":
 # BUSINESS DASHBOARD
 # =================================================
 elif st.session_state.role == "business":
+    st.markdown("<div class='app-card'>", unsafe_allow_html=True)
     st.markdown("## 🏢 Business Emotion Dashboard")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs([
-        "📊 Customer Database",
-        "✍️ Single Review",
-        "📂 Batch / File Upload"
-    ])
+    # ================= SIDEBAR NAVIGATION =================
+    st.sidebar.title("📊 Navigation")
+    page = st.sidebar.radio(
+        "Go to",
+        ["Overview", "Single Review", "Batch / Upload", "Reports"]
+    )
 
-st.sidebar.title("📊 Navigation")
-page = st.sidebar.radio(
-    "Go to",
-    ["Overview", "Single Review", "Batch / Upload", "Reports"]
-)
+    # ================= OVERVIEW =================
+    if page == "Overview":
+        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+        st.markdown("### 📊 Customer Database Overview")
 
-    # -------- TAB 1 --------
-    with tab1:
         df = load_reviews()
         if df.empty:
             st.info("No customer data available.")
+            st.session_state.source_df = None
         else:
             st.session_state.source_df = df.copy()
+            st.success(f"Loaded {len(df)} customer reviews.")
 
-    # -------- TAB 2 --------
-    with tab2:
-        review = st.text_area("Enter a review to test")
-        if st.button("Analyze Review"):
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ================= SINGLE REVIEW =================
+    elif page == "Single Review":
+        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+        st.markdown("### ✍️ Single Review Testing")
+
+        review = st.text_area(
+            "Enter a review",
+            placeholder="delivery lambat but staff rude gila"
+        )
+
+        if st.button("Analyze Review", use_container_width=True):
             if review.strip():
                 st.session_state.source_df = pd.DataFrame([{
                     "review_text": review,
                     "timestamp": datetime.now()
                 }])
+                st.success("Review loaded for analysis.")
             else:
                 st.warning("Please enter a review.")
 
-    # -------- TAB 3 --------
-    with tab3:
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ================= BATCH / UPLOAD =================
+    elif page == "Batch / Upload":
+        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+        st.markdown("### 📂 Batch / File Upload")
+
         file = st.file_uploader("Upload CSV or TXT", type=["csv", "txt"])
+
         if file:
             if file.name.endswith(".csv"):
                 df = pd.read_csv(file)
@@ -240,8 +258,24 @@ page = st.sidebar.radio(
             else:
                 lines = file.read().decode("utf-8").splitlines()
                 df = pd.DataFrame(lines, columns=["review_text"])
+
             df["timestamp"] = datetime.now()
             st.session_state.source_df = df
+            st.success(f"{len(df)} reviews loaded.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ================= REPORTS =================
+    elif page == "Reports":
+        st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+        st.markdown("### 📄 Analysis Reports")
+
+        if st.session_state.source_df is None:
+            st.info("No data available for analysis.")
+        else:
+            st.success("Analysis data ready. Scroll down to view results.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # =================================================
     # ANALYSIS
