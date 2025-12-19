@@ -195,12 +195,6 @@ elif st.session_state.role == "customer":
 # =================================================
 # BUSINESS DASHBOARD
 # =================================================
-st.sidebar.title("📊 Navigation")
-page = st.sidebar.radio(
-    "Go to",
-    ["Overview", "Single Review", "Batch / Upload", "Reports"]
-)
-
 elif st.session_state.role == "business":
     st.markdown("## 🏢 Business Emotion Dashboard")
 
@@ -209,6 +203,12 @@ elif st.session_state.role == "business":
         "✍️ Single Review",
         "📂 Batch / File Upload"
     ])
+
+st.sidebar.title("📊 Navigation")
+page = st.sidebar.radio(
+    "Go to",
+    ["Overview", "Single Review", "Batch / Upload", "Reports"]
+)
 
     # -------- TAB 1 --------
     with tab1:
